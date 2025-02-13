@@ -20,6 +20,9 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
+#MOE mod
+from st_moe_pytorch import MoE
+
 
 def create_quantiles() -> list[float]:
   return [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
@@ -40,7 +43,7 @@ class TimesFMConfig:
   # The dimension of the MLP representations.
   intermediate_size: int = 1280
   # The number of head dimensions.
-  head_dim: int = 80  
+  head_dim: int = 80
   # The epsilon used by the rms normalization layers.
   rms_norm_eps: float = 1e-6
   # Patch length
@@ -325,6 +328,11 @@ class TransformerMLP(nn.Module):
     if paddings is not None:
       outputs = outputs * (1.0 - paddings[:, :, None])
     return outputs + x
+  
+
+
+
+
 
 
 class TimesFMAttention(nn.Module):
@@ -444,10 +452,23 @@ class TimesFMDecoderLayer(nn.Module):
         num_kv_heads=num_kv_heads,
         head_dim=head_dim,
     )
-    self.mlp = TransformerMLP(
-        hidden_size=hidden_size,
-        intermediate_size=intermediate_size,
-    )
+
+    #todo : make parameters adjustable
+    self.moe = MoE(dim=hidden_size, 
+                  num_experts=6,
+                  threshold_train = 0.2,          # at what threshold to accept a token to be routed to second expert and beyond - 0.2 was optimal for 2 expert routing, and apparently should be lower for 3
+                  threshold_eval = 0.2,
+                  capacity_factor_train = 1.25,   # experts have fixed capacity per batch. we need some extra capacity in case gating is not perfectly balanced.
+                  capacity_factor_eval = 2.,      # capacity_factor_* should be set to a value >=1
+                  balance_loss_coef = 1e-2,       # multiplier on the auxiliary expert balancing auxiliary loss
+                  router_z_loss_coef = 1e-3,      # loss weight for router z-loss
+                  )
+
+    # self.mlp = TransformerMLP( #change this to MOE
+    #     hidden_size=hidden_size,
+    #     intermediate_size=intermediate_size,
+    # )
+
     self.input_layernorm = RMSNorm(hidden_size, eps=rms_norm_eps)
 
   def forward(
@@ -469,10 +490,17 @@ class TimesFMDecoderLayer(nn.Module):
     )
     hidden_states = residual + hidden_states
 
-    # MLP
-    hidden_states = self.mlp(hidden_states, paddings=paddings)
+    # MLP #change this to MOE architecture
 
-    return scores, hidden_states
+    outputs, total_aux_loss, balance_loss, router_z_loss = self.moe(hidden_states)
+    if paddings is not None:
+      outputs = outputs * (1.0 - paddings[:, :, None]) #do padding operation here
+
+    hidden_states = outputs + hidden_states #residual connection from attentions to MOE outputs, may be unnecessary
+
+    # hidden_states = self.mlp(hidden_states, paddings=paddings)
+
+    return scores, hidden_states, total_aux_loss
 
 
 class StackedDecoder(nn.Module):
@@ -515,14 +543,14 @@ class StackedDecoder(nn.Module):
     for i in range(len(self.layers)):
       layer = self.layers[i]
       kv_cache = kv_caches[i] if kv_caches is not None else None
-      _, hidden_states = layer(
+      _, hidden_states, total_aux_loss = layer(
           hidden_states=hidden_states,
           mask=mask,
           paddings=paddings,
           kv_write_indices=kv_write_indices,
           kv_cache=kv_cache,
       )
-    return hidden_states
+    return hidden_states, total_aux_loss
 
 
 class PositionalEmbedding(torch.nn.Module):
@@ -718,10 +746,10 @@ class PatchedTimeSeriesDecoder(nn.Module):
     )
     f_emb = self.freq_emb(freq)  # B x 1 x D
     model_input += f_emb
-    model_output = self.stacked_transformer(model_input, patched_padding)
+    model_output, total_aux_loss = self.stacked_transformer(model_input, patched_padding)
 
     output_ts = self._postprocess_output(model_output, num_outputs, stats)
-    return output_ts
+    return output_ts, total_aux_loss
 
   def decode(
       self,
