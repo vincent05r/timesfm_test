@@ -32,7 +32,7 @@ _BATCH_SIZE = flags.DEFINE_integer("batch_size", 64,
                                    "Batch size for the randomly sampled batch")
 _DATASET = flags.DEFINE_string("dataset", "etth1", "The name of the dataset.")
 
-_MODEL_PATH = flags.DEFINE_string("model_path", "google/timesfm-2.0-500m-jax",
+_MODEL_PATH = flags.DEFINE_string("model_path", "google/timesfm-2.0-500m-pytorch",
                                   "The name of the model.")
 _DATETIME_COL = flags.DEFINE_string("datetime_col", "date",
                                     "Column having datetime.")
