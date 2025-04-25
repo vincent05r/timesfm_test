@@ -26,6 +26,10 @@ from timesfm import data_loader
 import torch
 import tqdm
 
+import argparse
+import logging
+
+
 # FLAGS = flags.FLAGS
 
 # _BATCH_SIZE = flags.DEFINE_integer("batch_size", 64,
@@ -129,64 +133,86 @@ def _smape(y_pred, y_true):
   return abs_diff / abs_val
 
 
-def eval():
+def eval(config):
   """Eval pipeline."""
-  dataset = _DATASET.value
-  data_path = DATA_DICT[dataset]["data_path"]
-  freq = DATA_DICT[dataset]["freq"]
+  dataset = os.path.basename(config.dataset)
+  data_path = config.dataset
+  freq = data_path.split('_')[-1].split('.')[0]
+  if freq == '1wk':
+    freq = '1w'
+  elif freq == '1m':
+    freq = '1min'
   int_freq = timesfm.freq_map(freq)
-  boundaries = DATA_DICT[dataset]["boundaries"]
+  boundary = pd.read_csv(open(data_path, "r")).shape[0]
 
   data_df = pd.read_csv(open(data_path, "r"))
 
-  if _TS_COLS.value is not None:
-    ts_cols = DATA_DICT[dataset]["ts_cols"]
-    num_cov_cols = DATA_DICT[dataset]["num_cov_cols"]
-    cat_cov_cols = DATA_DICT[dataset]["cat_cov_cols"]
+  if config.ts_cols is not None:
+    raise NotImplementedError("todo")
+    # ts_cols = DATA_DICT[dataset]["ts_cols"]
+    # num_cov_cols = DATA_DICT[dataset]["num_cov_cols"]
+    # cat_cov_cols = DATA_DICT[dataset]["cat_cov_cols"]
   else:
-    ts_cols = [col for col in data_df.columns if col != _DATETIME_COL.value]
+    ts_cols = [col for col in data_df.columns if col != config.datetime_col]
     num_cov_cols = None
     cat_cov_cols = None
-  batch_size = min(_BATCH_SIZE.value, len(ts_cols))
+  batch_size = min(config.batch_size, len(ts_cols))
   dtl = data_loader.TimeSeriesdata(
       data_path=data_path,
-      datetime_col=_DATETIME_COL.value,
+      datetime_col=config.datetime_col,
       num_cov_cols=num_cov_cols,
       cat_cov_cols=cat_cov_cols,
       ts_cols=np.array(ts_cols),
-      train_range=[0, boundaries[0]],
-      val_range=[boundaries[0], boundaries[1]],
-      test_range=[boundaries[1], boundaries[2]],
-      hist_len=_CONTEXT_LEN.value,
-      pred_len=_PRED_LEN.value,
+      train_range=[0, boundary],
+      val_range=[0, boundary],
+      test_range=[0, boundary],
+      hist_len=config.context_len,
+      pred_len=config.horizon_len,
       batch_size=batch_size,
       freq=freq,
-      normalize=_NORMALIZE.value,
+      normalize=config.normalize,
       epoch_len=None,
       holiday=False,
       permute=False,
   )
   eval_itr = dtl.tf_dataset(mode="test",
-                            shift=_PRED_LEN.value).as_numpy_iterator()
-  model_path = _MODEL_PATH.value
+                            shift=config.horizon_len).as_numpy_iterator()
+  model_path = config.model_path
+  #implement correct path for each models
+
   if model_path.startswith("amazon"):
     model = chronos.ChronosPipeline.from_pretrained(
         model_path,
         device_map="auto",
         torch_dtype=torch.bfloat16,
     )
+
   else:
-    model = timesfm.TimesFm(
-        hparams=timesfm.TimesFmHparams(
-            backend="gpu",
-            per_core_batch_size=32,
-            horizon_len=128,
-            num_layers=50,
-            context_len=_CONTEXT_LEN.value,
-            use_positional_embedding=False,
-        ),
-        checkpoint=timesfm.TimesFmCheckpoint(huggingface_repo_id=model_path),
-    )
+    if model_path == "google/timesfm-2.0-500m-pytorch":
+      model = timesfm.TimesFm(
+          hparams=timesfm.TimesFmHparams(
+              backend="gpu",
+              per_core_batch_size=32,
+              horizon_len=128,
+              num_layers=50,
+              context_len=config.context_len,
+              use_positional_embedding=False,
+          ),
+          checkpoint=timesfm.TimesFmCheckpoint(huggingface_repo_id=model_path),
+      )
+    elif model_path == "google/timesfm-1.0-200m-pytorch":
+      model = timesfm.TimesFm(
+      hparams=timesfm.TimesFmHparams(
+          backend="gpu",
+          per_core_batch_size=32,
+          horizon_len=128,
+      ),
+      checkpoint=timesfm.TimesFmCheckpoint(
+          huggingface_repo_id="google/timesfm-1.0-200m-pytorch"),
+      )
+
+
+
   smape_run_losses = []
   mse_run_losses = []
   mae_run_losses = []
@@ -199,7 +225,7 @@ def eval():
     past = batch[0]
     actuals = batch[3]
     forecasts = get_forecasts(model_path, model, past, int_freq,
-                              _PRED_LEN.value)
+                              config.horizon_len)
     forecasts = forecasts[:, 0:actuals.shape[1]]
     mae_run_losses.append(_mae(forecasts, actuals).sum())
     mse_run_losses.append(_mse(forecasts, actuals).sum())
@@ -207,35 +233,80 @@ def eval():
     num_elements += actuals.shape[0] * actuals.shape[1]
     abs_sum += np.abs(actuals).sum()
 
-  mse_val = np.sum(mse_run_losses) / num_elements
+  class NumpyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, (np.integer,)):
+            return int(obj)
+        elif isinstance(obj, (np.floating,)):
+            return float(obj)
+        elif isinstance(obj, (np.ndarray,)):
+            return obj.tolist()
+        elif isinstance(obj, (np.bool_)):
+            return bool(obj)
+        else:
+            return super(NumpyEncoder, self).default(obj)
 
-  result_dict = {
-      "mse": mse_val,
-      "smape": np.sum(smape_run_losses) / num_elements,
-      "mae": np.sum(mae_run_losses) / num_elements,
-      "wape": np.sum(mae_run_losses) / abs_sum,
-      "nrmse": np.sqrt(mse_val) / (abs_sum / num_elements),
-      "num_elements": num_elements,
-      "abs_sum": abs_sum,
-      "total_time": time.time() - start_time,
-      "model_path": model_path,
-      "dataset": dataset,
-      "freq": freq,
-      "pred_len": _PRED_LEN.value,
-      "context_len": _CONTEXT_LEN.value,
-  }
-  run_id = np.random.randint(10000)
-  save_path = os.path.join(_RESULTS_DIR.value, str(run_id))
-  print(f"Saving results to {save_path}", flush=True)
-  os.makedirs(save_path, exist_ok=True)
-  with open(os.path.join(save_path, "results.json"), "w") as f:
-    json.dump(result_dict, f)
-  print(result_dict, flush=True)
+  if num_elements != 0:
+
+    mse_val = np.sum(mse_run_losses) / num_elements
+    
+    result_dict = {
+        "mse": mse_val,
+        "smape": np.sum(smape_run_losses) / num_elements,
+        "mae": np.sum(mae_run_losses) / num_elements,
+        "wape": np.sum(mae_run_losses) / abs_sum,
+        "nrmse": np.sqrt(mse_val) / (abs_sum / num_elements),
+        "num_elements": num_elements,
+        "abs_sum": abs_sum,
+        "total_time": time.time() - start_time,
+        "model_path": model_path,
+        "dataset": dataset,
+        "freq": freq,
+        "pred_len": config.horizon_len,
+        "context_len": config.context_len,
+    }
+    run_id = config.run_id
+    result_sv_name = "{}_{}_h{}_id{}".format(os.path.basename(model_path).split('.')[0], dataset, config.horizon_len, run_id)
+    save_path = os.path.join(config.result_dir, result_sv_name)
+    print(f"Saving results to {save_path}", flush=True)
+    os.makedirs(save_path, exist_ok=True)
+    with open(os.path.join(save_path, "results.json"), "w") as f:
+      json.dump(result_dict, f, cls=NumpyEncoder)
+    print(result_dict, flush=True)
+    logging.info("Result dictionary: %s", result_dict)
+  
+  else:
+    print("no data for this set")
 
 
 if __name__ == "__main__":
 
+  parser = argparse.ArgumentParser(description='FFM_longeval')
 
 
-  
-  eval()
+  #data
+  parser.add_argument('--dataset', type=str, default="etth1")
+  parser.add_argument('--horizon_len', type=int, default=96)
+  parser.add_argument('--context_len', type=int, default=128)
+  parser.add_argument('--batch_size', type=int, default=128)
+  parser.add_argument('--datetime_col', type=str, default="date")
+  parser.add_argument('--ts_cols', nargs='*', default=None,
+                  help="List of time-series feature column names.")
+  parser.add_argument('--normalize', action='store_true',
+                  help="Apply normalization if set.")
+  parser.add_argument('--num_cov_cols', nargs='*', default=None,
+                  help="List of numerical covariate column names.")
+  parser.add_argument('--cat_cov_cols', nargs='*', default=None,
+                  help="List of categorical covariate column names.")
+
+  #logging
+  parser.add_argument('--logging', type=int, default=1, help='1 = logging, 0 = not logging')
+  parser.add_argument('--logging_name', type=str, default='exp')
+  parser.add_argument('--result_dir', type=str, default="./results/long_horizon")
+
+  #model
+  parser.add_argument('--model_path', type=str, required=True, help='correct model checkpoint path')
+
+  config = parser.parse_args()
+
+  eval(config)
