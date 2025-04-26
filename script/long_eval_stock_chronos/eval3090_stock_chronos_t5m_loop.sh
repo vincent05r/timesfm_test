@@ -6,7 +6,7 @@ base_dir=datasets/test_v1_nv_flat
 datetime_col=Datetime
 
 # Result base directory (all results will go under this)
-result_base_dir=./results/chronos/chronos_small_of1
+result_base_dir=./results/chronos/chronos_medium_of1
 run_id=1
 
 # Model & Data settings
@@ -16,7 +16,7 @@ context_len=128
 logging=0
 logging_name=exp
 
-model_path=amazon/chronos-t5-small
+model_path=amazon/chronos-t5-base
 # amazon/chronos-t5-small amazon/chronos-t5-base amazon/chronos-t5-large
 
 # === Execution ===
