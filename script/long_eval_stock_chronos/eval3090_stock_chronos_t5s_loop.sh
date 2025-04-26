@@ -20,30 +20,32 @@ model_path=amazon/chronos-t5-small
 # google/timesfm-2.0-500m-pytorch   
 
 # === Execution ===
-for dataset_path in "$base_dir"/*; do
-  if [ -d "$dataset_path" ]; then
-    dataset_name=$(basename "$dataset_path")
+for horizon_len in "${horizon_lens[@]}"; do
+  for dataset_path in "$base_dir"/*; do
+    if [ -d "$dataset_path" ]; then
+      dataset_name=$(basename "$dataset_path")
 
-    # Compose result directory
-    result_dir="${result_base_dir}/${dataset_name}"
+      # Compose result directory
+      result_dir="${result_base_dir}/h${horizon_len}/${dataset_name}"
 
-    echo "🚀 Running evaluation for $dataset_name"
-    echo "🕒 Datetime column: $datetime_col"
-    echo "📁 Saving results to: $result_dir"
+      echo "🚀 Running evaluation for $dataset_name with horizon_len=$horizon_len"
+      echo "🕒 Datetime column: $datetime_col"
+      echo "📁 Saving results to: $result_dir"
 
-    python -u src/run_eval_tsfm_stock.py \
-      --dataset_dir "$dataset_path" \
-      --run_id "$run_id" \
-      --datetime_col "$datetime_col" \
-      --horizon_len "$horizon_len" \
-      --context_len "$context_len" \
-      --logging "$logging" \
-      --logging_name "$logging_name" \
-      --result_dir "$result_dir" \
-      --model_path "$model_path" \
-      --normalize \
+      python -u src/run_eval_tsfm_stock.py \
+        --dataset_dir "$dataset_path" \
+        --run_id "$run_id" \
+        --datetime_col "$datetime_col" \
+        --horizon_len "$horizon_len" \
+        --context_len "$context_len" \
+        --logging "$logging" \
+        --logging_name "$logging_name" \
+        --result_dir "$result_dir" \
+        --model_path "$model_path" \
+        --normalize \
 
-    echo "✅ Done with $dataset_name"
-    echo "--------------------------------------------"
-  fi
+      echo "✅ Done with $dataset_name (horizon_len=$horizon_len)"
+      echo "--------------------------------------------"
+    fi
+  done
 done
