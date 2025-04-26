@@ -77,6 +77,9 @@ class TimeSeriesdata(object):
       self.data_df['ccol'] = np.zeros(self.data_df.shape[0])
       cat_cov_cols = ['ccol']
     self.data_df.fillna(0, inplace=True)
+    self.data_df[datetime_col] = pd.to_datetime(self.data_df[datetime_col], errors='coerce', utc=True)
+    self.data_df = self.data_df.dropna(subset=[datetime_col])
+    self.data_df[datetime_col] = self.data_df[datetime_col].dt.tz_localize(None)
     self.data_df.set_index(pd.DatetimeIndex(self.data_df[datetime_col]),
                            inplace=True)
     self.num_cov_cols = num_cov_cols
