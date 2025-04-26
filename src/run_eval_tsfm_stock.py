@@ -25,6 +25,7 @@ import timesfm
 from timesfm import data_loader
 import torch
 import tqdm
+from typing import Optional, Tuple, List, Dict
 
 import argparse
 import logging
@@ -133,7 +134,69 @@ def _smape(y_pred, y_true):
   return abs_diff / abs_val
 
 
-def eval(config):
+def find_files_with_suffix(directory: str, suffix: str) -> List[str]:
+  """
+  Recursively traverse the given directory to find all files ending with `suffix`.
+
+  Args:
+      directory (str): Path to the directory where the search should begin.
+      suffix (str): File suffix (e.g., ".csv", ".txt") to filter by.
+
+  Returns:
+      List[str]: List of full file paths that match the given suffix.
+  """
+  matched_files = []
+  for root, dirs, files in os.walk(directory):
+      dirs.sort()   # Ensures deterministic traversal of subdirectories
+      files.sort()  # Ensures deterministic file ordering
+      for f in files:
+          if f.endswith(suffix):
+              matched_files.append(os.path.join(root, f))
+  return matched_files
+
+
+
+
+
+def get_model_api(config):
+  model_path = config.model_path
+  #implement correct path for each models
+
+  if model_path.startswith("amazon"):
+    model = chronos.ChronosPipeline.from_pretrained(
+        model_path,
+        device_map="auto",
+        torch_dtype=torch.bfloat16,
+    )
+
+  else:
+    if model_path == "google/timesfm-2.0-500m-pytorch":
+      model = timesfm.TimesFm(
+          hparams=timesfm.TimesFmHparams(
+              backend="gpu",
+              per_core_batch_size=32,
+              horizon_len=128,
+              num_layers=50,
+              context_len=config.context_len,
+              use_positional_embedding=False,
+          ),
+          checkpoint=timesfm.TimesFmCheckpoint(huggingface_repo_id=model_path),
+      )
+    elif model_path == "google/timesfm-1.0-200m-pytorch":
+      model = timesfm.TimesFm(
+      hparams=timesfm.TimesFmHparams(
+          backend="gpu",
+          per_core_batch_size=32,
+          horizon_len=128,
+      ),
+      checkpoint=timesfm.TimesFmCheckpoint(
+          huggingface_repo_id="google/timesfm-1.0-200m-pytorch"),
+      )
+
+  return model
+
+
+def eval(config, model):
   """Eval pipeline."""
   dataset = os.path.basename(config.dataset)
   data_path = config.dataset
@@ -177,41 +240,8 @@ def eval(config):
   )
   eval_itr = dtl.tf_dataset(mode="test",
                             shift=config.horizon_len).as_numpy_iterator()
+  
   model_path = config.model_path
-  #implement correct path for each models
-
-  if model_path.startswith("amazon"):
-    model = chronos.ChronosPipeline.from_pretrained(
-        model_path,
-        device_map="auto",
-        torch_dtype=torch.bfloat16,
-    )
-
-  else:
-    if model_path == "google/timesfm-2.0-500m-pytorch":
-      model = timesfm.TimesFm(
-          hparams=timesfm.TimesFmHparams(
-              backend="gpu",
-              per_core_batch_size=32,
-              horizon_len=128,
-              num_layers=50,
-              context_len=config.context_len,
-              use_positional_embedding=False,
-          ),
-          checkpoint=timesfm.TimesFmCheckpoint(huggingface_repo_id=model_path),
-      )
-    elif model_path == "google/timesfm-1.0-200m-pytorch":
-      model = timesfm.TimesFm(
-      hparams=timesfm.TimesFmHparams(
-          backend="gpu",
-          per_core_batch_size=32,
-          horizon_len=128,
-      ),
-      checkpoint=timesfm.TimesFmCheckpoint(
-          huggingface_repo_id="google/timesfm-1.0-200m-pytorch"),
-      )
-
-
 
   smape_run_losses = []
   mse_run_losses = []
@@ -281,11 +311,10 @@ def eval(config):
 
 if __name__ == "__main__":
 
-  parser = argparse.ArgumentParser(description='FFM_longeval')
-
+  parser = argparse.ArgumentParser(description='zeroshot_longeval')
 
   #data
-  parser.add_argument('--dataset', type=str, default="etth1")
+  parser.add_argument('--dataset_dir', required=True, help='directory for dataset name')
   parser.add_argument('--horizon_len', type=int, default=96)
   parser.add_argument('--context_len', type=int, default=128)
   parser.add_argument('--batch_size', type=int, default=128)
@@ -303,10 +332,23 @@ if __name__ == "__main__":
   parser.add_argument('--logging', type=int, default=1, help='1 = logging, 0 = not logging')
   parser.add_argument('--logging_name', type=str, default='exp')
   parser.add_argument('--result_dir', type=str, default="./results/long_horizon")
+  parser.add_argument('--run_id', default=None)
 
   #model
   parser.add_argument('--model_path', type=str, required=True, help='correct model checkpoint path')
 
-  config = parser.parse_args()
+  args = parser.parse_args()
+  
+  model = get_model_api(args)
 
-  eval(config)
+  dataset_list = find_files_with_suffix(args.dataset_dir, suffix='.csv')
+
+  for dataset in dataset_list:
+    print(f"\n🧪 Running evaluation for dataset: {dataset}")
+    config = argparse.Namespace(**vars(args))  # Shallow copy
+    config.dataset = dataset
+
+    if config.run_id is None:
+        config.run_id = int(time.time())
+
+    eval(config, model)

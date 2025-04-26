@@ -18,7 +18,7 @@ import os
 import sys
 import time
 from absl import flags
-#import chronos
+import chronos #type: ignore
 import numpy as np
 import pandas as pd
 import timesfm
