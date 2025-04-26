@@ -17,7 +17,7 @@ logging=0
 logging_name=exp
 
 model_path=amazon/chronos-t5-small
-# google/timesfm-2.0-500m-pytorch   
+# amazon/chronos-t5-small amazon/chronos-t5-base amazon/chronos-t5-large
 
 # === Execution ===
 for horizon_len in "${horizon_lens[@]}"; do
