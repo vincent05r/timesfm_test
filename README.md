@@ -2,7 +2,7 @@
 
 TimesFM  (Time Series Foundation Model) is a pretrained time-series foundation model developed by Google
 Research for time-series forecasting.
-
+:)
 * Paper: [A decoder-only foundation model for time-series forecasting](https://arxiv.org/abs/2310.10688), to appear in ICML 2024.
 * [Google Research blog](https://research.google/blog/a-decoder-only-foundation-model-for-time-series-forecasting/)
 * [Hugging Face release](https://huggingface.co/collections/google/timesfm-release-66e4be5fdb56e960c1e482a6)
