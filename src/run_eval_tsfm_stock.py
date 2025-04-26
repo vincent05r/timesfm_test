@@ -192,6 +192,8 @@ def get_model_api(config):
       checkpoint=timesfm.TimesFmCheckpoint(
           huggingface_repo_id="google/timesfm-1.0-200m-pytorch"),
       )
+    
+    model._model.eval()
 
   return model
 

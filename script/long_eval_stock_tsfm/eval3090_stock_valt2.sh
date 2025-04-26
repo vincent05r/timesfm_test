@@ -6,7 +6,7 @@ base_dir=datasets/test_v1_nv_flat
 datetime_col=Datetime
 
 # Result base directory (all results will go under this)
-result_base_dir=./results/tsfm_500m_t1
+result_base_dir=./results/tsfm_200m_t1
 run_id=1
 
 # Model & Data settings
@@ -15,8 +15,8 @@ context_len=128
 logging=0
 logging_name=exp
 
-model_path=google/timesfm-2.0-500m-pytorch
-
+model_path=google/timesfm-1.0-200m-pytorch
+# google/timesfm-2.0-500m-pytorch   
 
 # === Execution ===
 for dataset_path in "$base_dir"/*; do
