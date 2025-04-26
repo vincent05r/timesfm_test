@@ -100,14 +100,13 @@ EPS = 1e-7
 def get_forecasts(model_path, model, past, freq, pred_len):
   """Get forecasts."""
   if model_path.startswith("amazon"):
-    # out = model.predict(
-    #     torch.tensor(past),
-    #     prediction_length=pred_len,
-    #     limit_prediction_length=False,
-    # )
-    # out = out.numpy()
-    # out = np.median(out, axis=1)
-    pass
+    out = model.predict(
+        torch.tensor(past),
+        prediction_length=pred_len,
+        limit_prediction_length=False,
+    )
+    out = out.numpy()
+    out = np.median(out, axis=1)
   else:
     lfreq = [freq] * past.shape[0]
     _, out = model.forecast(list(past), lfreq)
