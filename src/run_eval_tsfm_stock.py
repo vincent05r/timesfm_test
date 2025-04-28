@@ -339,6 +339,17 @@ if __name__ == "__main__":
   parser.add_argument('--model_path', type=str, required=True, help='correct model checkpoint path')
 
   args = parser.parse_args()
+
+  # torch.backends.cuda.matmul.allow_tf32 = False
+  # torch.backends.cudnn.allow_tf32 = False
+  # torch.backends.cudnn.benchmark = False
+  # torch.backends.cudnn.deterministic = True
+  print(f"TF32 Allow Matmul : {torch.backends.cuda.matmul.allow_tf32}")
+  print(f"TF32 Allow Convolution : {torch.backends.cudnn.allow_tf32}")
+  print(f"CUDNN Benchmark Enabled : {torch.backends.cudnn.benchmark}")
+  print(f"CUDA Version : {torch.version.cuda}")
+  print(f"Torch Compile Active : {torch._dynamo.config.verbose}")
+  # torch.cuda.set_per_process_memory_fraction(0.3, device=0)  #memory reserve ratio cap for each process
   
   model = get_model_api(args)
 

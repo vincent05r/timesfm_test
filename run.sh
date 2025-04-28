@@ -1,0 +1,4 @@
+bash script/long_eval_stock_tsfm/eval3090_stock_tsfm1_loop.sh
+echo done
+bash script/long_eval_stock_tsfm/eval3090_stock_tsfm2_loop.sh
+echo done

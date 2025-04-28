@@ -10,8 +10,8 @@ result_base_dir=./results/tsfm/tsfm_200m_of1
 run_id=1
 
 # Model & Data settings
-# Define the list of horizon lengths
-horizon_lens=(10 30 96)
+# Define the list of horizon lengths  10 20 30 60 96
+horizon_lens=(10 20 30 60 96)
 context_len=128
 logging=0
 logging_name=exp
