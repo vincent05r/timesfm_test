@@ -164,7 +164,7 @@ def get_model_api(config):
   if model_path.startswith("amazon"):
     model = chronos.ChronosPipeline.from_pretrained(
         model_path,
-        device_map="auto",
+        device_map="cuda",
         torch_dtype=torch.bfloat16,
     )
 
