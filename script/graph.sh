@@ -32,7 +32,7 @@ for horizon_len in "${horizon_lens[@]}"; do
       echo "🕒 Datetime column: $datetime_col"
       echo "📁 Saving results to: $result_dir"
 
-      python -u src/run_eval_tsfm_stock.py \
+      python -u src/run_eval_tsfm_stock_plt.py \
         --dataset_dir "$dataset_path" \
         --run_id "$run_id" \
         --datetime_col "$datetime_col" \
