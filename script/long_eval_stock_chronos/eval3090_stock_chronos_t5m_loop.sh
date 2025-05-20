@@ -11,7 +11,7 @@ run_id=1
 
 # Model & Data settings
 # Define the list of horizon lengths
-horizon_lens=(20 30 60)
+horizon_lens=(10 20 30 60 96)
 context_len=128
 logging=0
 logging_name=exp
