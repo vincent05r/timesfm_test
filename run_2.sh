@@ -1,6 +1,6 @@
+bash script/long_eval_stock_chronos/eval3090_stock_chronos_t5L_loop.sh
+echo done
 bash script/long_eval_stock_chronos/eval3090_stock_chronos_t5s_loop.sh
 echo done
 bash script/long_eval_stock_chronos/eval3090_stock_chronos_t5m_loop.sh
-echo done
-bash script/long_eval_stock_chronos/eval3090_stock_chronos_t5L_loop.sh
 echo done
