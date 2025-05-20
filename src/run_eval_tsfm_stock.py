@@ -229,7 +229,7 @@ def eval(config, model):
       ts_cols=np.array(ts_cols),
       train_range=[0, boundary],
       val_range=[0, boundary],
-      test_range=[0, boundary],
+      test_range=[config.context_len, boundary],
       hist_len=config.context_len,
       pred_len=config.horizon_len,
       batch_size=batch_size,
