@@ -220,16 +220,16 @@ def eval(config, model):
     ts_cols = [col for col in data_df.columns if col != config.datetime_col]
     num_cov_cols = None
     cat_cov_cols = None
-  batch_size = min(config.batch_size, len(ts_cols))
+  batch_size = 1
   dtl = data_loader.TimeSeriesdata(
       data_path=data_path,
       datetime_col=config.datetime_col,
-      num_cov_cols=num_cov_cols,
+      num_cov_cols=num_cov_cols,  
       cat_cov_cols=cat_cov_cols,
       ts_cols=np.array(ts_cols),
       train_range=[0, boundary],
       val_range=[0, boundary],
-      test_range=[0, boundary],
+      test_range=[config.context_len, boundary],
       hist_len=config.context_len,
       pred_len=config.horizon_len,
       batch_size=batch_size,
@@ -273,12 +273,12 @@ def eval(config, model):
     actuals_np = actuals.detach().cpu().numpy() if isinstance(actuals, torch.Tensor) else actuals
     forecasts_np = forecasts.detach().cpu().numpy() if isinstance(forecasts, torch.Tensor) else forecasts
 
-    print(past_np)
-    print(len(past_np[0]))
-    print(actuals_np)
-    print(len(actuals_np[0]))
-    print(forecasts_np)
-    print(len(forecasts_np[0]))
+    # print(past_np)
+    # print(len(past_np[0]))
+    # print(actuals_np)
+    # print(len(actuals_np[0]))
+    # print(forecasts_np)
+    # print(len(forecasts_np[0]))
 
     # Pick a sample (assume batch dimension exists)
     idx = 0
@@ -291,13 +291,14 @@ def eval(config, model):
 
     # Plot
     plt.figure(figsize=(8, 4))
-    plt.plot(gt_full, label='Ground Truth', color='blue')
-    plt.plot(np.arange(len(past_seq), len(past_seq) + len(forecast_seq)), forecast_seq, label='Forecast', color='red')
+    plt.plot(gt_full, label='Ground Truth', color='blue', linewidth=2)
+    plt.plot(np.arange(len(past_seq), len(past_seq) + len(forecast_seq)), forecast_seq, label='Forecast', color='red', linewidth=3)
     plt.legend()
-    plt.grid(True)
+    plt.grid(False)
     plt.tight_layout()
     # plt.show()
-    plt.savefig(r"pics/timesfm.jpg", dpi=400, bbox_inches='tight')
+    plt.savefig(r"pics/chrono_s_60_p2.jpg", dpi=400, bbox_inches='tight')
+    break
 
 
   class NumpyEncoder(json.JSONEncoder):
